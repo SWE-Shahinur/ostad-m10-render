@@ -64,7 +64,8 @@ The token must be stored only in an n8n credential. Never commit it to this repo
 ## Output
 
 - Workflow artifact `final-short-<run_id>` (14 days)
-- Prerelease `short-<job_id>-<run_id>` with `final_<job_id>.mp4`
+- Prerelease `short-<job_id>` with `final_<job_id>.mp4`
+  (direct link: `https://github.com/SWE-Shahinur/ostad-m10-render/releases/download/short-<job_id>/final_<job_id>.mp4`)
 
 Public releases are visible to anyone with the link. Uploading to YouTube is a separate step and requires explicit approval.
 

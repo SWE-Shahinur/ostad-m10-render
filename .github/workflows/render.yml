@@ -60,7 +60,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           JOB=$(jq -r .job_id payload.json | tr -cd 'A-Za-z0-9_-')
-          TAG="short-${JOB}-${GITHUB_RUN_ID}"
+          TAG="short-${JOB}"
           cp work/final.mp4 "final_${JOB}.mp4"
           gh release create "$TAG" "final_${JOB}.mp4" \
             --title "$TAG" \
