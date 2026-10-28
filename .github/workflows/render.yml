@@ -1,0 +1,76 @@
+name: render-shorts
+
+# Triggered by n8n through the GitHub REST API (workflow_dispatch).
+# Runs on free GitHub-hosted runners. No paid services are used.
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'JSON string: {"job_id": "...", "images": [5 URLs], "overlays": [5 short texts]}'
+        required: true
+        type: string
+
+permissions:
+  contents: write   # create the release that holds the final MP4
+  actions: read
+
+concurrency:
+  group: render-shorts
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install FFmpeg and font
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg fonts-dejavu-core jq
+          ffmpeg -version | head -n 1
+
+      - name: Validate payload
+        env:
+          PAYLOAD: ${{ inputs.payload }}
+        run: |
+          printf '%s' "$PAYLOAD" > payload.json
+          jq -e '(.job_id | type == "string") and (.images | length == 5) and (.overlays | length == 5)' payload.json > /dev/null
+          echo "Payload OK: job $(jq -r .job_id payload.json | tr -cd 'A-Za-z0-9_-')"
+
+      - name: Download and validate five images
+        run: bash scripts/fetch_images.sh payload.json work
+
+      - name: Render five 6-second clips and merge to 30 seconds
+        run: bash scripts/render.sh payload.json work
+
+      - name: Verify final MP4 with ffprobe
+        run: bash scripts/verify.sh work/final.mp4 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-short-${{ github.run_id }}
+          path: work/final.mp4
+          retention-days: 14
+
+      - name: Publish release asset (download link for n8n)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          JOB=$(jq -r .job_id payload.json | tr -cd 'A-Za-z0-9_-')
+          TAG="short-${JOB}-${GITHUB_RUN_ID}"
+          cp work/final.mp4 "final_${JOB}.mp4"
+          gh release create "$TAG" "final_${JOB}.mp4" \
+            --title "$TAG" \
+            --notes "Silent 30-second vertical Short. Image-motion (Ken Burns) animation, not AI image-to-video." \
+            --prerelease
+          URL=$(gh release view "$TAG" --json url -q .url)
+          echo "FINAL_MP4_URL=$URL" >> "$GITHUB_OUTPUT"
+          echo "Final MP4: $URL" >> "$GITHUB_STEP_SUMMARY"
+        id: release
+
+      - name: Print final URL
+        run: |
+          echo "Final MP4 URL: ${{ steps.release.outputs.FINAL_MP4_URL }}"
